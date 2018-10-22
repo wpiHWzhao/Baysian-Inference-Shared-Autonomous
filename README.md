@@ -7,3 +7,4 @@ Toy Example of Baysian Inference for Shared Autonomous Tasks. Parts of the codes
 * In the repository folder, run
 `python run.py arm3 osc follow_key`
 * Then use the arrow keys to direct the end effector of the robot.
+![alt text](https://github.com/wpiHWzhao/Baysian-Inference-Shared-Autonomous/blob/master/Image/Screenshot%20from%202018-10-22%2014-46-38.png)
