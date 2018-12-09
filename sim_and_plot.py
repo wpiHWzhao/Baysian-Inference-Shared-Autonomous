@@ -17,6 +17,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 '''
 
 import numpy as np
+import matplotlib
+# matplotlib.use('TkAgg')
+matplotlib.use('Qt4Agg')
+
+
 from matplotlib import pyplot as plt
 from matplotlib import animation
 import csv
@@ -46,30 +51,36 @@ class Runner:
         self.infinite_trail = infinite_trail
         self.mouse_control = mouse_control
         self.title = title
+        self.threshold = 0.7
+        self.alpha = 0.9
+        self.takeoverflag = True
 
         self.sim_step = 0
         self.trail_index = 0
+        self.trail_flag = True
         self.EE_trajectory = []
 
+        # Set up start parameters and desired 3 targets
 
-        #Set up start parameters and desired 3 targets
-        self.start_x = 0.09525278363235057
-        self.start_y = 2.0123065071135193
-        self.target_desire_x_1 = -1.0
-        self.target_desire_y_1 = 2.5
+        self.start_x = 0
+        self.start_y = 1.0
+        self.target_desire_x_1 = -1.5
+        self.target_desire_y_1 = 3.0
         self.target_desire_x_2 = 0
-        self.target_desire_y_2 = 3.0
-        self.target_desire_x_3 = 1
-        self.target_desire_y_3 = 2.5
+        self.target_desire_y_2 = 3.5
+        self.target_desire_x_3 = 1.5
+        self.target_desire_y_3 = 3.0
         self.start_q = -1.57
-        self.goal_set = {'g1':(-1, 2.5), 'g2':(0, 3.0), 'g3':(1, 2.5)}
-        self.goal_belief = {'g1':1/3, 'g2':1/3, 'g3':1/3}
+        self.goal_set = {'g1': (-1.5, 3.0), 'g2': (0, 3.5), 'g3': (1.5, 3.0)}
+        self.goal_belief = {'g1': 1/3, 'g2': 1/3, 'g3': 1/3}
         self.init_s = ((self.start_x, self.start_y), self.start_q)
 
         self.bayes_solver = BayesianLearnerHS(self.goal_set, self.init_s)
         self.angles = dcp(self.bayes_solver.angles)
 
         self.tau = None
+
+
         
     def run(self, arm, control_shell, end_time=None):
 
@@ -85,11 +96,11 @@ class Runner:
 
         self.shell = control_shell
         
-        fig = plt.figure(figsize=(5.1,5.1), dpi=None)
-        fig.suptitle(self.title); 
+        fig = plt.figure(figsize=(8.1, 8.1), dpi=None)
+        fig.suptitle(self.title);
         # set the padding of the subplot explicitly
-        fig.subplotpars.left=.1; fig.subplotpars.right=.9
-        fig.subplotpars.bottom=.1; fig.subplotpars.top=.9
+        fig.subplotpars.left = .1; fig.subplotpars.right = .9
+        fig.subplotpars.bottom = .1; fig.subplotpars.top = .9
 
         ax = fig.add_subplot(1, 1, 1, 
                              xlim=(box[0], box[1]), 
@@ -99,7 +110,7 @@ class Runner:
         ax.set_aspect(1) 
 
         # set up plot elements
-        self.trail, = ax.plot([], [], color='#888888', lw=3)
+        self.trail, = ax.plot([], [], color='magenta', lw=3)
         self.arm_line, = ax.plot([], [], 'o-', mew=4, color='b', lw=5)
         #self.orien_line, = ax.plot([], [], 'o-', mew=0.1, color='r', lw=0.5)
         self.target_line, = ax.plot([], [], 'r-x', mew=4)
@@ -113,7 +124,7 @@ class Runner:
                                    dtype='float') * np.NAN
     
         if self.trajectory is not None:
-            ax.plot(self.trajectory[:,0], self.trajectory[:,1], alpha=.3)
+            ax.plot(self.trajectory[:, 0], self.trajectory[:, 1], alpha=.3)
 
         # connect up mouse event if specified
         if self.mouse_control: 
@@ -153,7 +164,7 @@ class Runner:
                         pass
 
             # hook up function to keyboard event
-            fig.canvas.mpl_connect('key_press_event',on_key_trans)
+            fig.canvas.mpl_connect('key_press_event', on_key_trans)
             fig.canvas.mpl_connect('key_press_event', on_key_orien)
 
         frames = 5000
@@ -162,6 +173,12 @@ class Runner:
                    init_func=self.anim_init, frames=frames, interval=50, blit=True)
         
         self.anim = anim
+
+
+        # self.anim.save('result.mp4', fps=30, extra_args=['-vcodec', 'libx264'])
+
+        # print('task finished.')
+        # print('save traj.')
 
 
     # TODO: add a parallel function to process the Bayesian Inference and Update the Belief
@@ -193,7 +210,8 @@ class Runner:
         if self.end_time is not None:
             # check for run time
             if (self.sim_step * self.dt) > self.end_time:
-                self.anim._stop()
+                self.anim.stop()
+
                 plt.close()
 
         if self.control_type == 'random':
@@ -206,13 +224,14 @@ class Runner:
         # before drawing
         for j in range(self.display_steps):            
             # update control signal
-            if (self.sim_step % self.control_steps) == 0 or  self.tau is None:
+            if (self.sim_step % self.control_steps) == 0 or self.tau is None:
                     self.tau = self.shell.control(self.arm)
             # apply control signal and simulate
             self.arm.apply_torque(u=self.tau, dt=self.dt)
 
-            self.sim_step +=1
+            self.sim_step += 1
 
+        self.goal_belief = self.bayes_solver.init_belief
 
         # update figure
         #self.arm_orien = np.array([[self.arm.position()[0,3],self.arm.position()[0,3]+0.5*np.cos(self.start_q)],
@@ -220,54 +239,101 @@ class Runner:
         #self.orien_line.set_data(self.arm_orien)
         self.arm_line.set_data(*self.arm.position())
 
-        # # Record end effector trajectory
-        # self.EE_trajectory.append([self.arm.position()[0,3],self.arm.position()[1,3]])
-        # csvfile = 'trajectory.csv'
-        # with open(csvfile,"w") as output:
-        #     writer = csv.writer(output, lineterminator='\n')
-        #     writer.writerows(self.EE_trajectory)
-
         # update belief
         s_t = ((self.arm.position()[0, 3], self.arm.position()[1, 3]), self.start_q)
         # s_t = ((self.start_x, self.start_y), self.start_q)
         self.goal_belief = self.bayes_solver.Bayesian_inference(s_t)
 
+        # take over process
+        # if self.takeoverflag:
+        #     if self.goal_belief['g1'] > self.threshold:
+        #         self.target = self.alpha*np.array(self.goal_set['g1']) + (1-self.alpha)*self.target
+        #     elif self.goal_belief['g2'] > self.threshold:
+        #         self.target = self.alpha*np.array(self.goal_set['g2']) + (1-self.alpha)*self.target
+        #     elif self.goal_belief['g3'] > self.threshold:
+        #         self.target = self.alpha*np.array(self.goal_set['g3']) + (1-self.alpha)*self.target
+        #     self.alpha = 1 - (1-self.alpha)*0.5
         # self.angles = dcp(self.bayes_solver.angles)
+
+        # # Record end effector trajectory
+        self.EE_trajectory.append([self.arm.position()[0, 3],
+                                   self.arm.position()[1, 3],
+                                   self.goal_belief['g1'],
+                                   self.goal_belief['g2'],
+                                   self.goal_belief['g3']])
+
+        csvfile = 'trajectory_new.csv'
+        with open(csvfile, "w") as output:
+            writer = csv.writer(output, lineterminator='\n')
+            writer.writerows(self.EE_trajectory)
+
+        # csvfile = 'trajectory_belief.csv'
+        # with open(csvfile, "w") as output:
+        #     writer = csv.writer(output, lineterminator='\n')
+        #     writer.writerows(self.goal_belief['g1'])
 
 
         #self.info.set_text(self.make_info_text())
-        self.trail.set_data(self.trail_data[:,0], self.trail_data[:,1])
+        self.trail.set_data(self.trail_data[:, 0], self.trail_data[:, 1])
         if self.target is not None:
             target = self.target
             self.target_line.set_data(target)
 
         # update hand trail
-        if self.shell.pen_down:
+        if self.trail_flag:
             if self.infinite_trail:
                 # if we're writing, keep all pen_down history
                 self.trail_index += 1
 
                 # if we've hit the end of the trail, double it and copy
-                if self.trail_index >= self.trail_data.shape[0]-1:
-                    trail_data = np.zeros((self.trail_data.shape[0]*2,
-                                           self.trail_data.shape[1]))*np.nan
-                    trail_data[:self.trail_index+1] = self.trail_data
+                if self.trail_index >= self.trail_data.shape[0] - 1:
+                    trail_data = np.zeros((self.trail_data.shape[0] * 2,
+                                           self.trail_data.shape[1])) * np.nan
+                    trail_data[:self.trail_index + 1] = self.trail_data
                     self.trail_data = trail_data
 
                 self.trail_data[self.trail_index] = \
-                                        self.arm_line.get_xydata()[-1]
+                    self.arm_line.get_xydata()[-1]
             else:
                 # else just use a buffer window
                 self.trail_data[:-1] = self.trail_data[1:]
                 self.trail_data[-1] = self.arm_line.get_xydata()[-1]
-        else: 
-            # if pen up add a break in the trail
-            self.trail_data[self.trail_index] = [np.nan, np.nan]
 
-        return self.target_line, self.info, self.trail, self.arm_line#,  self.orien_line
+        # if self.shell.pen_down:
+        #     if self.infinite_trail:
+        #         # if we're writing, keep all pen_down history
+        #         self.trail_index += 1
+        #
+        #         # if we've hit the end of the trail, double it and copy
+        #         if self.trail_index >= self.trail_data.shape[0]-1:
+        #             trail_data = np.zeros((self.trail_data.shape[0]*2,
+        #                                    self.trail_data.shape[1]))*np.nan
+        #             trail_data[:self.trail_index+1] = self.trail_data
+        #             self.trail_data = trail_data
+        #
+        #         self.trail_data[self.trail_index] = \
+        #                                 self.arm_line.get_xydata()[-1]
+        #     else:
+        #         # else just use a buffer window
+        #         self.trail_data[:-1] = self.trail_data[1:]
+        #         self.trail_data[-1] = self.arm_line.get_xydata()[-1]
+        # else:
+        #     # if pen up add a break in the trail
+        #     self.trail_data[self.trail_index] = [np.nan, np.nan]
+
+        return self.target_line, self.info, self.trail, self.arm_line #,  self.orien_line
+
+    def save(self):
+        Writer = animation.writers['ffmpeg']
+        writer = Writer(fps=15, metadata=dict(artist='Me'), bitrate=1800)
+        self.anim.save('im.mp4', writer=writer)
 
     def show(self):
         try:
+            # plt.plot(self.)
+            # self.save()
             plt.show()
+
+            # self.save()
         except AttributeError:
             pass

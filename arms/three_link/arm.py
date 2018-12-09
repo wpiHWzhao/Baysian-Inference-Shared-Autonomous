@@ -25,7 +25,7 @@ class Arm(ArmBase):
     """A wrapper around a MapleSim generated C simulation
     of a three link arm."""
 
-    def __init__(self, init_q=[np.pi/5.5, np.pi/1.7, np.pi/6.],
+    def __init__(self, init_q=[np.pi/7.6, np.pi/1.29, np.pi/6.],
                  init_dq=[0., 0., 0.], **kwargs):
 
         self.DOF = 3

@@ -79,3 +79,5 @@ runner.run(arm=arm, control_shell=control_shell,
            end_time=(float(args['--end_time'])
                      if args['--end_time'] is not None else None))
 runner.show()
+# runner.save()
+print('task finished.')
