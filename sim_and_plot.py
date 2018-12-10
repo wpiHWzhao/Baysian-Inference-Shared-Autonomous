@@ -256,11 +256,16 @@ class Runner:
         # self.angles = dcp(self.bayes_solver.angles)
 
         # # Record end effector trajectory
+        # self.EE_trajectory.append([self.arm.position()[0, 3],
+        #                            self.arm.position()[1, 3],
+        #                            self.goal_belief['g1'],
+        #                            self.goal_belief['g2'],
+        #                            self.goal_belief['g3']])
         self.EE_trajectory.append([self.arm.position()[0, 3],
                                    self.arm.position()[1, 3],
-                                   self.goal_belief['g1'],
-                                   self.goal_belief['g2'],
-                                   self.goal_belief['g3']])
+                                   self.arm.q[0],
+                                   self.arm.q[1],
+                                   self.arm.q[2]])
 
         csvfile = 'trajectory_new.csv'
         with open(csvfile, "w") as output:
